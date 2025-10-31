@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Control de Asistencia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* Evita el "flash" gris al tocar en móviles */
+        }
+
+        /* Contenedor principal para centrar */
+        .app-container {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Estilos de la tarjeta de fichada */
+        #fichada-view .card-header {
+            text-align: center;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        /* Estilos de los botones de fichada */
+        .fichada-button {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.125rem; /* 18px */
+            font-weight: 600;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+        }
+        
+        .fichada-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Botón Entrada */
+        .btn-entrada {
+            background-color: #22c55e; /* green-500 */
+            color: white;
+        }
+        .btn-entrada:not(:disabled):hover {
+            background-color: #16a34a; /* green-600 */
+            transform: translateY(-2px);
+        }
+
+        /* Botón Salida */
+        .btn-salida {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+        }
+        .btn-salida:not(:disabled):hover {
+            background-color: #dc2626; /* red-600 */
+            transform: translateY(-2px);
+        }
+
+        /* Área de Verificaciones */
+        .verificaciones-box {
+            background-color: #f8fafc; /* gray-50 */
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .verificacion-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.875rem; /* 14px */
+            color: #475569; /* gray-600 */
+        }
+        
+        .verificacion-item.success { color: #16a34a; /* green-600 */ }
+        .verificacion-item.error { color: #dc2626; /* red-600 */ }
+        .verificacion-item.pending { color: #64748b; /* gray-500 */ }
+        
+        .verificacion-item svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        /* Spinner para estado "cargando" */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Modal para mensajes */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            pointer-events: none;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 350px;
+            text-align: center;
+            transform: scale(0.95);
+            transition: transform 0.2s ease-in-out;
+        }
+        .modal-overlay.visible .modal-content {
+            transform: scale(1);
+        }
+
+        .modal-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px auto;
+        }
+        .modal-icon.success { background-color: #ecfdf5; /* green-50 */ }
+        .modal-icon.error { background-color: #fef2f2; /* red-50 */ }
+        .modal-icon.success svg { color: #10b981; /* green-500 */ }
+        .modal-icon.error svg { color: #ef4444; /* red-500 */ }
+
+        .modal-button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .modal-button:hover {
+            background-color: #2563eb; /* blue-600 */
+        }
+        
+        /* Estilos para la Vista de Login */
+        .input-field {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #cbd5e1; /* gray-300 */
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-field:focus {
+            outline: none;
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .login-button:hover {
+            background-color: #2563eb; /* blue-600 */
+        }
+        .login-button:disabled {
+            background-color: #94a3b8; /* gray-400 */
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100">
+
+    <!-- 
+      VISTA DE LOGIN (Inicialmente visible)
+      Se oculta cuando el usuario se loguea
+    -->
+    <div id="login-view" class="app-container">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">Control de Asistencia</h1>
+            <p class="text-gray-500">Por favor, iniciá sesión para fichar.</p>
+        </div>
+        
+        <div class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input type="email" id="email" class="input-field" placeholder="tu-email@empresa.com">
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                <input type="password" id="password" class="input-field" placeholder="••••••••">
+            </div>
+            
+            <button id="login-button" class="login-button">
+                Ingresar
+            </button>
+            
+            <p id="login-error" class="text-red-500 text-sm text-center hidden"></p>
+        </div>
+    </div>
+
+
+    <!-- 
+      VISTA DE FICHADA (Inicialmente oculta)
+      Se muestra cuando el usuario ya está logueado
+    -->
+    <div id="fichada-view" class="app-container hidden">
+        <!-- Encabezado con datos del empleado -->
+        <div class="card-header">
+            <h1 id="empleado-nombre" class="text-2xl font-bold text-gray-800">Cargando...</h1>
+            <p id="empleado-legajo" class="text-gray-500">Legajo: ...</p>
+            <button id="logout-button" class="text-sm text-blue-500 hover:underline mt-2">Cerrar Sesión</button>
+        </div>
+
+        <!-- Botones de Fichada -->
+        <div class="space-y-4 mt-6">
+            <button id="btn-entrada" class="fichada-button btn-entrada" disabled>
+                <!-- Icono SVG de Flecha Entrando -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3h12" />
+                </svg>
+                FICHAR ENTRADA
+            </button>
+            
+            <button id="btn-salida" class="fichada-button btn-salida" disabled>
+                <!-- Icono SVG de Flecha Saliendo -->
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0-3-3m0 0 3-3m-3 3H3" />
+                </svg>
+                FICHAR SALIDA
+            </button>
+        </div>
+
+        <!-- Verificaciones -->
+        <div class="verificaciones-box mt-6 space-y-3">
+            <h3 class="text-sm font-semibold text-gray-700 mb-2">Verificaciones:</h3>
+            
+            <!-- Estado GPS -->
+            <div id="status-gps" class="verificacion-item pending">
+                <!-- Icono "reloj" (pendiente) -->
+                <svg id="status-gps-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+                <span id="status-gps-text">Obteniendo ubicación GPS...</span>
+            </div>
+            
+            <!-- Estado Fichada -->
+            <div id="status-fichada" class="verificacion-item pending hidden">
+                <!-- Icono "spinner" (cargando) -->
+                <svg id="status-fichada-icon" class="spinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="status-fichada-text">Enviando fichada al servidor...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Éxito/Error -->
+    <div id="modal" class="modal-overlay">
+        <div class="modal-content">
+            <div id="modal-icon" class="modal-icon">
+                <!-- Icono de éxito o error se insertará aquí -->
+            </div>
+            <h2 id="modal-title" class="text-xl font-bold text-gray-800 mb-2"></h2>
+            <p id="modal-message" class="text-gray-600 mb-6"></p>
+            <button id="modal-close-btn" class="modal-button">Entendido</button>
+        </div>
+    </div>
+
+    <!-- 
+      Iconos SVG para el Modal (no se ven hasta que se usan)
+    -->
+    <svg width="0" height="0" class="hidden">
+        <defs>
+            <!-- Icono Éxito (tilde) -->
+            <svg id="icon-success" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+            </svg>
+            <!-- Icono Error (cruz) -->
+            <svg id="icon-error" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+            <!-- Icono GPS Ok (check-circle) -->
+            <svg id="icon-gps-ok" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+            <!-- Icono GPS Error (x-circle) -->
+            <svg id="icon-gps-error" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                 <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+            </svg>
+        </defs>
+    </svg>
+
+
+    <!-- 
+    ====================================================================
+    SCRIPT (Toda la lógica de la app)
+    ====================================================================
+    -->
+    <script type="module">
+        //----------------------------------------------------------------------
+        // SECCIÓN 1: IMPORTACIONES DE FIREBASE (Versión 12.5.0)
+        //----------------------------------------------------------------------
+        // Funciones principales de la App de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+        
+        // Funciones de Autenticación (para Login)
+        import { 
+            getAuth, 
+            onAuthStateChanged, // El "vigilante" que mira si alguien inició sesión
+            signInWithEmailAndPassword, // Para el login
+            signOut // Para cerrar sesión
+        } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-auth.js";
+        
+        // Funciones de Base de Datos (Firestore)
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc,     // Para *agregar* un documento nuevo (una fichada)
+            doc,        // Para referenciar un documento específico
+            getDoc,     // Para *leer* ese documento (los datos del empleado)
+            serverTimestamp // Para usar la hora del servidor (más segura)
+        } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
+
+        
+        //----------------------------------------------------------------------
+        // SECCIÓN 2: TU CONFIGURACIÓN DE FIREBASE
+        //----------------------------------------------------------------------
+        const firebaseConfig = {
+            apiKey: "AIzaSyCFuc1zvAHZgNc4zttimrxdPQJz4Gpt-sw",
+            authDomain: "controldeasistencia-14364.firebaseapp.com",
+            projectId: "controldeasistencia-14364",
+            storageBucket: "controldeasistencia-14364.firebasestorage.app",
+            messagingSenderId: "246986968365",
+            appId: "1:246986968365:web:8b44be26abd0a2f14f17a4",
+            measurementId: "G-P7ZXTPKLRE"
+        };
+
+
+        //----------------------------------------------------------------------
+        // SECCIÓN 3: CONFIGURACIONES DEL NEGOCIO (¡Editable!)
+        //----------------------------------------------------------------------
+        const COORDENADAS_OFICINA = {
+            lat: -31.373145, // Latitud de tu oficina
+            lon: -64.228887  // Longitud de tu oficina
+        };
+        const MAXIMA_DISTANCIA_METROS = 100; // Tolerancia en metros
+
+
+        //----------------------------------------------------------------------
+        // SECCIÓN 4: VARIABLES GLOBALES Y ELEMENTOS DEL DOM
+        //----------------------------------------------------------------------
+        let db; // Variable para la Base de Datos
+        let auth; // Variable para la Autenticación
+        let currentEmployee = null; // Guardará los datos del empleado logueado
+        let currentCoords = null; // Guardará las coordenadas GPS
+        let isGpsValid = false; // Bandera para saber si el GPS es válido
+
+        // Vistas (Pantallas)
+        const loginView = document.getElementById('login-view');
+        const fichadaView = document.getElementById('fichada-view');
+
+        // Elementos del Login
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginButton = document.getElementById('login-button');
+        const loginError = document.getElementById('login-error');
+
+        // Elementos de Fichada
+        const nombreEmpleado = document.getElementById('empleado-nombre');
+        const legajoEmpleado = document.getElementById('empleado-legajo');
+        const btnEntrada = document.getElementById('btn-entrada');
+        const btnSalida = document.getElementById('btn-salida');
+        const logoutButton = document.getElementById('logout-button');
+
+        // Elementos de Status
+        const statusGps = document.getElementById('status-gps');
+        const statusGpsIcon = document.getElementById('status-gps-icon');
+        const statusGpsText = document.getElementById('status-gps-text');
+        const statusFichada = document.getElementById('status-fichada');
+        const statusFichadaText = document.getElementById('status-fichada-text');
+
+        // Elementos del Modal
+        const modal = document.getElementById('modal');
+        const modalIcon = document.getElementById('modal-icon');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        // Iconos SVG
+        const iconSuccess = document.getElementById('icon-success').cloneNode(true);
+        const iconError = document.getElementById('icon-error').cloneNode(true);
+        const iconGpsOk = document.getElementById('icon-gps-ok').cloneNode(true);
+        const iconGpsError = document.getElementById('icon-gps-error').cloneNode(true);
+
+
+        //----------------------------------------------------------------------
+        // SECCIÓN 5: LÓGICA DE LOGIN Y AUTENTICACIÓN
+        //----------------------------------------------------------------------
+        
+        // 5.1. Inicializador de la App
+        function initApp() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app); // Se conecta a la BD (default)
+                
+                // Iniciar el "vigilante" de autenticación
+                setupAuthObserver();
+                
+                // Asignar eventos a los botones de login
+                loginButton.addEventListener('click', handleLogin);
+                logoutButton.addEventListener('click', handleLogout);
+                modalCloseBtn.addEventListener('click', hideModal);
+
+            } catch (error) {
+                console.error("Error al inicializar Firebase:", error);
+                showModal('error', 'Error Crítico', 'No se pudo conectar con Firebase. Recargá la página.');
+            }
+        }
+
+        // 5.2. El "Vigilante" (Director de Orquesta)
+        function setupAuthObserver() {
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // --- Caso 1: Hay un usuario logueado (o acaba de loguearse) ---
+                    console.log("Usuario autenticado:", user.uid);
+                    
+                    // Buscar los datos de este empleado en Firestore
+                    const employeeData = await cargarDatosEmpleado(user.uid);
+                    
+                    if (employeeData) {
+                        currentEmployee = employeeData; // Guardamos los datos globalmente
+                        // Mostrar la info en la UI
+                        nombreEmpleado.textContent = currentEmployee.nombre;
+                        legajoEmpleado.textContent = `Legajo: ${currentEmployee.legajo}`;
+                        
+                        // Ocultar login, mostrar app de fichada
+                        loginView.classList.add('hidden');
+                        fichadaView.classList.remove('hidden');
+                        
+                        // Iniciar la lógica de la app de fichada
+                        initFichadaApp();
+                    } else {
+                        // Error: Se logueó pero no tiene datos en Firestore
+                        console.error("Error: Usuario autenticado pero sin datos en Firestore.");
+                        showModal('error', 'Error de Datos', `Tu usuario (${user.email}) es válido, pero no tiene datos de legajo cargados. Contactá a RRHH.`);
+                        handleLogout(); // Lo deslogueamos
+                    }
+                } else {
+                    // --- Caso 2: No hay nadie logueado (o acaba de cerrar sesión) ---
+                    console.log("Usuario no autenticado.");
+                    currentEmployee = null;
+                    
+                    // Ocultar app de fichada, mostrar login
+                    loginView.classList.remove('hidden');
+                    fichadaView.classList.add('hidden');
+                    resetFichadaView();
+                }
+            });
+        }
+        
+        // 5.3. Manejador del Login
+        async function handleLogin() {
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+            
+            if (!email || !password) {
+                showLoginError("Completá el email y la contraseña.");
+                return;
+            }
+            
+            loginButton.disabled = true;
+            loginButton.textContent = "Ingresando...";
+            loginError.classList.add('hidden');
+
+            try {
+                // Intentar iniciar sesión con Firebase Auth
+                await signInWithEmailAndPassword(auth, email, password);
+                // Si esto tiene éxito, onAuthStateChanged (el "vigilante") 
+                // se disparará y hará el resto del trabajo.
+            } catch (error) {
+                console.error("Error de login:", error.code);
+                let friendlyError = "Error al ingresar. Verificá tus datos.";
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+                    friendlyError = "Email o contraseña incorrectos.";
+                } else if (error.code === 'auth/invalid-email') {
+                    friendlyError = "El formato del email no es válido.";
+                }
+                showLoginError(friendlyError);
+            } finally {
+                loginButton.disabled = false;
+                loginButton.textContent = "Ingresar";
+            }
+        }
+        
+        // 5.4. Manejador de Cerrar Sesión
+        function handleLogout() {
+            signOut(auth).catch(error => {
+                console.error("Error al cerrar sesión:", error);
+            });
+        }
+        
+        // 5.5. Cargar Datos del Empleado desde Firestore
+        async function cargarDatosEmpleado(uid) {
+            try {
+                // Va a la colección "empleados" y busca el documento con el ID = uid
+                const docRef = doc(db, "empleados", uid);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    // ¡Encontrado! Devuelve los datos (nombre, legajo, etc.)
+                    return docSnap.data();
+                } else {
+                    // No encontrado
+                    return null;
+                }
+            } catch (error) {
+                console.error("Error al leer datos del empleado:", error);
+                return null;
+            }
+        }
+
+        // 5.6. Mostrar error en el Login
+        function showLoginError(message) {
+            loginError.textContent = message;
+            loginError.classList.remove('hidden');
+        }
+        
+        // 5.7. Resetear la vista de login
+        function resetFichadaView() {
+            nombreEmpleado.textContent = "Cargando...";
+            legajoEmpleado.textContent = "Legajo: ...";
+            emailInput.value = "";
+            passwordInput.value = "";
+            loginError.classList.add('hidden');
+        }
+        
+        
+        //----------------------------------------------------------------------
+        // SECCIÓN 6: LÓGICA DE FICHADA (GPS, Botones, etc.)
+        //----------------------------------------------------------------------
+
+        // 6.1. Iniciar la App (solo se llama post-login)
+        function initFichadaApp() {
+            // Asignar eventos a los botones de fichar
+            btnEntrada.addEventListener('click', () => fichar('entrada'));
+            btnSalida.addEventListener('click', () => fichar('salida'));
+            
+            // Iniciar la obtención de GPS
+            obtenerGPS();
+        }
+
+        // 6.2. Obtener Ubicación GPS
+        function obtenerGPS() {
+            if (!navigator.geolocation) {
+                setGpsStatus('error', 'Tu navegador no soporta GPS.');
+                return;
+            }
+
+            // Opciones de alta precisión
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000, // 10 segundos
+                maximumAge: 0 // No usar caché
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // ÉXITO
+                    currentCoords = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    };
+                    console.log("GPS Obtenido:", currentCoords);
+                    validarDistancia();
+                },
+                (error) => {
+                    // ERROR
+                    console.warn("Error de GPS:", error.message);
+                    let msg = "No se pudo obtener la ubicación.";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        msg = "Permiso de ubicación denegado.";
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        msg = "Ubicación no disponible.";
+                    } else if (error.code === error.TIMEOUT) {
+                        msg = "Se agotó el tiempo de espera de GPS.";
+                    }
+                    setGpsStatus('error', msg);
+                },
+                options
+            );
+        }
+
+        // 6.3. Validar Distancia GPS
+        function validarDistancia() {
+            const distancia = calcularDistancia(currentCoords.lat, currentCoords.lon, COORDENADAS_OFICINA.lat, COORDENADAS_OFICINA.lon);
+            const distanciaRedondeada = Math.round(distancia);
+
+            console.log(`Distancia a la oficina: ${distanciaRedondeada}m. Precisión: ${Math.round(currentCoords.accuracy)}m.`);
+
+            if (distancia <= MAXIMA_DISTANCIA_METROS) {
+                // ¡Éxito! Está cerca
+                setGpsStatus('success', `Estás a ${distanciaRedondeada}m. Ubicación válida.`);
+                isGpsValid = true;
+                habilitarBotones(true);
+            } else {
+                // ¡Error! Está lejos
+                setGpsStatus('error', `Estás demasiado lejos de la oficina (a ${distanciaRedondeada}m).`);
+                isGpsValid = false;
+                habilitarBotones(false); // No puede fichar
+            }
+        }
+
+        // 6.4. Función Principal de Fichada
+        async function fichar(tipo) {
+            // Doble chequeo por si acaso
+            if (!isGpsValid || !currentEmployee) {
+                showModal('error', 'Error al Fichar', 'No se cumplen todas las condiciones (GPS o Empleado).');
+                return;
+            }
+
+            // Mostrar estado "Enviando..."
+            setFichadaStatus('pending', `Enviando fichada de ${tipo}...`);
+            habilitarBotones(false); // Deshabilitar mientras envía
+
+            try {
+                // 1. Preparar el documento a guardar
+                const fichadaData = {
+                    legajo: currentEmployee.legajo,
+                    nombre: currentEmployee.nombre,
+                    uid: auth.currentUser.uid,
+                    tipo: tipo, // 'entrada' o 'salida'
+                    
+                    // Usamos la hora del servidor (más segura)
+                    timestamp: serverTimestamp(), 
+                    
+                    // Guardamos los datos de geolocalización
+                    geolocalizacion: {
+                        lat: currentCoords.lat,
+                        lon: currentCoords.lon,
+                        accuracy: currentCoords.accuracy
+                    },
+                    // (Plan B - Si serverTimestamp o GeoPoint fallan)
+                    // timestamp_local: new Date(),
+                    // latitud: currentCoords.lat,
+                    // longitud: currentCoords.lon
+                };
+
+                // 2. Guardar en la colección "fichadas"
+                const docRef = await addDoc(collection(db, "fichadas"), fichadaData);
+                
+                console.log("Documento escrito con ID: ", docRef.id);
+                showModal('success', '¡Fichada Exitosa!', `Se registró tu ${tipo} a las ${new Date().toLocaleTimeString()}.`);
+
+            } catch (error) {
+                console.error("Error al guardar en Firestore: ", error);
+                showModal('error', 'Error de Conexión', 'No se pudo guardar la fichada. Reintentá en unos segundos.');
+            } finally {
+                // Reactivar la app
+                setFichadaStatus('hidden'); // Ocultar estado
+                habilitarBotones(true); // Reactivar botones
+            }
+        }
+
+        //----------------------------------------------------------------------
+        // SECCIÓN 7: FUNCIONES AUXILIARES (UI, Cálculo, etc.)
+        //----------------------------------------------------------------------
+        
+        // 7.1. Habilitar/Deshabilitar botones de fichar
+        function habilitarBotones(habilitar) {
+            btnEntrada.disabled = !habilitar;
+            btnSalida.disabled = !habilitar;
+        }
+
+        // 7.2. Actualizar el estado del GPS en la UI
+        function setGpsStatus(tipo, mensaje) {
+            statusGps.className = `verificacion-item ${tipo}`;
+            statusGpsText.textContent = mensaje;
+            
+            // Cambiar el icono
+            statusGpsIcon.innerHTML = ''; // Limpiar icono anterior
+            if (tipo === 'success') {
+                statusGpsIcon.appendChild(iconGpsOk);
+            } else if (tipo === 'error') {
+                statusGpsIcon.appendChild(iconGpsError);
+            } else {
+                // 'pending' (usa el icono de reloj por defecto)
+            }
+        }
+        
+        // 7.3. Actualizar el estado de la fichada en la UI
+        function setFichadaStatus(estado, mensaje) {
+            if (estado === 'hidden') {
+                statusFichada.classList.add('hidden');
+            } else {
+                statusFichada.classList.remove('hidden');
+                statusFichadaText.textContent = mensaje;
+            }
+        }
+
+        // 7.4. Mostrar el Modal
+        function showModal(tipo, titulo, mensaje) {
+            modalTitle.textContent = titulo;
+            modalMessage.textContent = mensaje;
+            
+            modalIcon.innerHTML = ''; // Limpiar
+            if (tipo === 'success') {
+                modalIcon.className = 'modal-icon success';
+                modalIcon.appendChild(iconSuccess);
+            } else {
+                modalIcon.className = 'modal-icon error';
+                modalIcon.appendChild(iconError);
+            }
+            
+            modal.classList.add('visible');
+        }
+
+        // 7.5. Ocultar el Modal
+        function hideModal() {
+            modal.classList.remove('visible');
+        }
+
+        // 7.6. Cálculo de Distancia (Fórmula de Haversine)
+        function calcularDistancia(lat1, lon1, lat2, lon2) {
+            function toRad(x) { return x * Math.PI / 180; }
+            const R = 6371000; // Radio de la Tierra en metros
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distancia en metros
+        }
+
+        //----------------------------------------------------------------------
+        // SECCIÓN 8: INICIO DE LA APLICACIÓN
+        //----------------------------------------------------------------------
+        // Cuando la página termina de cargar, se llama a initApp()
+        document.addEventListener('DOMContentLoaded', initApp);
+
+    </script>
+</body>
+</html>
+
+
