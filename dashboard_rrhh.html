@@ -242,7 +242,8 @@
             setDoc,     // Para crear/sobrescribir un documento con un ID específico
             doc,        // Para referenciar un documento
             deleteDoc,  // Para borrar un documento
-            getDocs     // Para cargar todos los docs una vez
+            getDocs,    // Para cargar todos los docs una vez
+            orderBy     // Para ordenar los resultados
         } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-firestore.js";
 
         
@@ -342,15 +343,27 @@
         function setupAdminAuthObserver() {
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    console.log("Admin autenticado:", user.email);
-                    adminEmail.textContent = user.email;
-                    
-                    loginView.classList.add('hidden');
-                    dashboardView.classList.remove('hidden');
-                    
-                    // Iniciar la carga de datos
-                    loadFichadas();
-                    loadEmpleados();
+                    // Solo permitir el login si el email es el tuyo (o de otro admin)
+                    // Esta es una capa de seguridad simple para que un empleado no
+                    // pueda loguearse al dashboard de admin.
+                    // Podrías tener una lista de emails de admins.
+                    if (user.email === 'juancruz.montagni@novogar.com.ar') {
+                        console.log("Admin autenticado:", user.email);
+                        adminEmail.textContent = user.email;
+                        
+                        loginView.classList.add('hidden');
+                        dashboardView.classList.remove('hidden');
+                        
+                        // Iniciar la carga de datos
+                        loadFichadas();
+                        loadEmpleados();
+                    } else {
+                        // Si un empleado intenta loguearse, lo rechazamos.
+                        console.warn("Intento de login de NO-ADMIN:", user.email);
+                        handleAdminLogout(); // Lo deslogueamos
+                        loginErrorAdmin.textContent = "No tenés permisos de administrador.";
+                        loginErrorAdmin.classList.remove('hidden');
+                    }
                     
                 } else {
                     console.log("Admin no autenticado.");
@@ -423,7 +436,8 @@
         
         function loadFichadas() {
             console.log("Cargando listener de Fichadas...");
-            const q = query(collection(db, "fichadas")); // Podríamos agregar orderBy y limit
+            // Ordenamos por 'timestamp' en orden descendente (las más nuevas primero)
+            const q = query(collection(db, "fichadas"), orderBy("timestamp", "desc"));
             
             unsubscribeFichadas = onSnapshot(q, (snapshot) => {
                 if (snapshot.empty) {
@@ -434,22 +448,14 @@
                 fichadasLoading.classList.add('hidden');
                 fichadasTableBody.innerHTML = ''; // Limpiar tabla
                 
-                let fichadas = [];
                 snapshot.forEach(doc => {
-                    fichadas.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Ordenar por timestamp (más nuevos primero)
-                // ¡IMPORTANTE! Esto requiere que "timestamp" exista. 
-                // Usamos "|| null" para evitar que crashee si un dato es undefined.
-                fichadas.sort((a, b) => (b.timestamp || null) - (a.timestamp || null));
-
-                fichadas.forEach(fichada => {
+                    const fichada = doc.data();
                     const tr = document.createElement('tr');
                     
                     // Formatear Fecha
                     let fecha = "Fecha inválida";
                     if (fichada.timestamp) {
+                        // Convertir el Timestamp de Firebase a Date
                         fecha = fichada.timestamp.toDate().toLocaleString('es-AR', {
                             day: '2-digit', month: '2-digit', year: 'numeric',
                             hour: '2-digit', minute: '2-digit'
@@ -464,8 +470,9 @@
                     // Formatear Ubicación
                     let ubicacionLink = "No disponible";
                     if (fichada.geolocalizacion) {
-                        const lat = fichada.geolocalizacion.lat;
-                        const lon = fichada.geolocalizacion.lon;
+                        // El GeoPoint se lee como .latitude y .longitude
+                        const lat = fichada.geolocalizacion.latitude;
+                        const lon = fichada.geolocalizacion.longitude;
                         ubicacionLink = `<a href="https://www.google.com/maps?q=${lat},${lon}" target="_blank" class="text-blue-600 hover:underline">Ver en Mapa</a>`;
                     }
                     
@@ -481,7 +488,13 @@
                 
             }, (error) => {
                 console.error("Error al cargar fichadas: ", error);
-                fichadasLoading.textContent = "Error al cargar datos.";
+                // ¡ERROR COMÚN! Si esto falla, puede ser por el índice de Firestore.
+                if (error.code === 'failed-precondition') {
+                    fichadasLoading.innerHTML = `Error: Necesitás crear un índice en Firestore. <br> Hacé clic en el link de este error en la consola y crealo.`;
+                    console.error("¡¡¡ACCIÓN REQUERIDA!!!", error.message);
+                } else {
+                    fichadasLoading.textContent = "Error al cargar datos.";
+                }
             });
         }
         
@@ -491,7 +504,8 @@
         
         function loadEmpleados() {
             console.log("Cargando listener de Empleados...");
-            const q = query(collection(db, "empleados"));
+            // Ordenamos por 'legajo'
+            const q = query(collection(db, "empleados"), orderBy("legajo"));
             
             unsubscribeEmpleados = onSnapshot(q, (snapshot) => {
                 if (snapshot.empty) {
@@ -512,7 +526,7 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${empleado.legajo || 'N/A'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${empleado.email || 'N/A'}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono text-xs">${uid}</td>
-                        <td class="px-6 py-4 whitespace-nowGrap text-sm font-medium">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <button class="edit-btn text-blue-600 hover:text-blue-900" data-id="${uid}">Editar</button>
                             <button class="delete-btn text-red-600 hover:text-red-900 ml-4" data-id="${uid}" data-nombre="${empleado.nombre || 'este empleado'}">Borrar</button>
                         </td>
@@ -527,7 +541,8 @@
                     
                     tr.querySelector('.edit-btn').addEventListener('click', (e) => {
                         const id = e.target.dataset.id;
-                        openEmployeeModal(id, empleado); // Pasar datos para editar
+                        // Pasamos el doc.id y los datos al modal
+                        openEmployeeModal(id, empleado);
                     });
                     
                     empleadosTableBody.appendChild(tr);
@@ -535,7 +550,12 @@
                 
             }, (error) => {
                 console.error("Error al cargar empleados: ", error);
-                empleadosLoading.textContent = "Error al cargar datos.";
+                if (error.code === 'failed-precondition') {
+                    empleadosLoading.innerHTML = `Error: Necesitás crear un índice en Firestore. <br> Hacé clic en el link de este error en la consola y crealo.`;
+                    console.error("¡¡¡ACCIÓN REQUERIDA!!!", error.message);
+                } else {
+                    empleadosLoading.textContent = "Error al cargar datos.";
+                }
             });
         }
         
@@ -587,6 +607,7 @@
                 // Usamos el UID como ID del documento en la colección "empleados"
                 const docRef = doc(db, "empleados", uid);
                 
+                // setDoc CREA o SOBREESCRIBE
                 await setDoc(docRef, {
                     nombre: nombre,
                     legajo: legajo,
@@ -610,13 +631,10 @@
         async function handleDeleteEmployee(uid, nombre) {
             // ¡¡¡NUNCA USAR confirm()!!!
             // En una app real, acá mostraríamos un modal de confirmación.
-            // Por simplicidad, vamos a asumir que sí.
-            // const
-            // if (!confirm(`¿Estás seguro de que querés borrar a ${nombre}? Esta acción no se puede deshacer.`)) {
-            //     return;
-            // }
-            console.log(`Pedido de borrado para ${nombre} (UID: ${uid}). En una app real, mostraríamos un modal.`);
-
+            // Por simplicidad, vamos a asumir que sí, pero no podemos pausar
+            // la ejecución del script. Lo borramos directamente.
+            console.log(`Pedido de borrado para ${nombre} (UID: ${uid}).`);
+            
             // IMPORTANTE: Esto borra el documento de Firestore,
             // pero NO borra el usuario de Authentication.
             // Eso (por ahora) sigue siendo un paso manual.
@@ -625,6 +643,7 @@
                 const docRef = doc(db, "empleados", uid);
                 await deleteDoc(docRef);
                 console.log("Empleado borrado (solo de Firestore):", uid);
+                
             } catch (error) {
                 console.error("Error al borrar empleado:", error);
                 // No podemos usar alert, mostramos en consola
